@@ -1,0 +1,93 @@
+{{- if hasKey $.Values "nfsclient" }}
+{{- $nfsCount := 0 }}
+{{- range $name,$config := $.Values.nfsclient.volumes | default dict }}
+  {{- if and (hasPrefix "nfs-" $config.storageClassName) (not (empty $config.mounts))}}
+      {{ $nfsCount = add1 $nfsCount}}
+  {{- end }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{$.Release.Name}}-nfsclient
+  namespace: {{$.Release.Namespace }}
+spec:
+  replicas: {{$.Values.nfsclient.replicas | default 1}}
+  selector:
+    matchLabels:
+      workload.user.cattle.io/workloadselector: apps.deployment-{{$.Release.Namespace}}-{{$.Release.Name}}-nfsclient
+  template:
+    metadata:
+      labels:
+        workload.user.cattle.io/workloadselector: apps.deployment-{{$.Release.Namespace}}-{{$.Release.Name}}-nfsclient
+    spec:
+      containers:
+      - image: "{{$.Values.nfsclient.image}}"
+        imagePullPolicy: Always
+        command:
+          - sh
+        name: {{$.Release.Name}}-nfsclient
+        env:
+          - name: RELEASE_TIME
+            value: {{ now | date "2006-01-02T15:04:05" | quote }}
+        {{- if $nfsCount }}
+        readinessProbe:
+          failureThreshold: {{get ($.Values.nfsclient.readinessProbe | default dict) "failureThreshold" | default 3}}
+          successThreshold: {{get ($.Values.nfsclient.readinessProbe | default dict) "successThreshold" | default 1}}
+          initialDelaySeconds: 2
+          timeoutSeconds: {{get ($.Values.nfsclient.readinessProbe | default dict) "timeoutSeconds" | default 4}}
+          periodSeconds: {{get ($.Values.nfsclient.readinessProbe | default dict) "periodSeconds" | default 5}}
+          exec:
+            command:
+              - /usr/bin/nfs_readness.sh
+        {{- end }}
+        volumeMounts:
+        {{- if $nfsCount }}
+          - name: readness
+            mountPath: /usr/bin/nfs_readness.sh
+            subPath: readness.sh
+        {{- end }}
+        {{- range $name,$config := $.Values.nfsclient.volumes | default dict }}
+        {{- if $config.mounts }}
+        {{- range $mount := $config.mounts }}
+          - name: {{$name}}
+            mountPath: {{$mount.mountPath}}
+          {{- if $mount.subPath }}
+            subPath: {{ $mount.subPath }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        stdin: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        tty: true
+      volumes:
+      {{- if $nfsCount }}
+      - name: readness
+        configMap:
+          name: {{ $.Release.Name }}-nfsclient-configmap-readness
+          optional: false
+          defaultMode: 0555
+      {{- end }}
+      {{- range $name,$config := $.Values.nfsclient.volumes | default dict }}
+      - name: {{$name}}
+        persistentVolumeClaim:
+          claimName: {{$.Release.Name}}-nfsclient-{{ $name }}
+      {{- end }}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30
+      {{- if $.Values.nfsclient.tolerations }}
+      tolerations:
+{{ $.Values.nfsclient.tolerations | toYaml | indent 8 }}
+      {{- end }}
+      {{- if $.Values.nfsclient.affinity }}
+      affinity:
+{{ $.Values.nfsclient.affinity | toYaml | indent 8 }}
+      {{- end }}
+      {{- if $.Values.nfsclient.nodeSelector }}
+      nodeSelector:
+{{ $.Values.nfsclient.nodeSelector | toYaml | indent 8 }}
+      {{- end }}
+{{- end}}

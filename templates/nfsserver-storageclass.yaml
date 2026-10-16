@@ -1,0 +1,44 @@
+{{- if hasKey $.Values "nfsserver" }}
+{{- $count := 0 }}
+{{- $mountOptions := dict }}
+{{- range $name,$config := $.Values.nfsserver.volumes | default dict }}
+{{- if $config.mounts }}
+{{- range $mount := $config.mounts }}
+  {{- $count = add $count 1}}
+  {{- $mountOptions = $mount.mountOptions | default dict}}
+  {{- if gt $count 1 }}
+---
+  {{- end }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  {{- if $mount.name }}
+  name: {{$.Release.Namespace}}-{{$.Release.Name}}-storageclass-{{$name}}-{{$mount.name}}
+  {{- else }}
+  name: {{$.Release.Namespace}}-{{$.Release.Name}}-storageclass-{{$name}}
+  {{- end }}
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: {{$.Release.Name}}-nfsserver.{{$.Release.Namespace}}
+  share: {{$mount.mountPath}}
+  mountPermissions: "0770"
+reclaimPolicy: {{$mount.reclaimPolicy | default "Delete"}}         # Delete will wipe the directory on the NFS server when PVC is deleted
+volumeBindingMode: Immediate
+mountOptions:
+  - hard
+  - nfsvers=4.2        # Adjust according to your NFS server version (e.g., 3, 4.0, 4.1)
+  - rsize={{int $mountOptions.rsize | default 102400}}      # Maximize read chunk size
+  - wsize={{int $mountOptions.wsize | default 102400}}      # Maximize write chunk size 
+  - timeo={{int $mountOptions.timeo | default 600}}          # Timeout before retry
+  - retrans={{int $mountOptions.retrans | default 3}}          # Number of retries
+  - nconnect={{$mountOptions.nconnect | default 4}}          # Number of parallel TCP connections, optional, default is 4 ,can be from 2 to 16
+  {{- if or (not (hasKey $mountOptions "noatime")) $mountOptions.noatime }}
+  - noatime            # Do not update file access times (saves huge write IOPS)
+  {{- end }}
+  {{- if or (not (hasKey $mountOptions "nodiratime")) $mountOptions.nodiratime }}
+  - nodiratime         # Do not update directory access times
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

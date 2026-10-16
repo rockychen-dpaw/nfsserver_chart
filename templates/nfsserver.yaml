@@ -1,0 +1,126 @@
+{{- if hasKey $.Values "nfsserver" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{$.Release.Name}}-nfsserver
+  namespace: {{ $.Release.Namespace}}
+spec:
+  podManagementPolicy: OrderedReady
+  replicas: 1
+  selector:
+    matchLabels:
+      workload.user.cattle.io/workloadselector: apps.statefulset-{{ $.Release.Namespace}}-{{$.Release.Name}}-nfsserver
+      workload.user.cattle.io/nfsserverselector: apps.statefulset-{{ $.Release.Namespace}}-nfsserver
+  serviceName: {{$.Release.Name}}-nfsserver-headless
+  template:
+    metadata:
+      labels:
+        workload.user.cattle.io/workloadselector: apps.statefulset-{{ $.Release.Namespace}}-{{$.Release.Name}}-nfsserver
+        workload.user.cattle.io/nfsserverselector: apps.statefulset-{{ $.Release.Namespace}}-nfsserver
+    spec:
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey:  kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            workload.user.cattle.io/nfsserverselector: apps.statefulset-{{ $.Release.Namespace}}-nfsserver
+      containers:
+      - image: {{$.Values.nfsserver.image}}
+        imagePullPolicy: IfNotPresent
+        name: {{$.Release.Name}}-nfsserver
+        env:
+          - name: SHARED_DIRECTORY
+            value: {{$.Values.nfsserver.shared_directory | default "/exports"}}
+          # Optional: restrict access to a specific CIDR block (default is '*')
+        ports:
+          - name: nfs
+            containerPort: 2049
+            protocol: TCP
+          - name: mountd
+            containerPort: 20048
+          - name: rpcbind
+            containerPort: 111
+        startupProbe:
+          failureThreshold: 40
+          successThreshold: 1
+          initialDelaySeconds: 3
+          timeoutSeconds: 2
+          periodSeconds: 2
+          exec:
+            command:
+              - showmount
+              - -e
+              - localhost
+        livenessProbe:
+          failureThreshold: 3
+          successThreshold: 1
+          initialDelaySeconds: 2
+          timeoutSeconds: 2
+          periodSeconds: 5
+          exec:
+            command:
+              - showmount
+              - -e
+              - localhost
+        volumeMounts:
+          - name: scripts
+            mountPath: /usr/bin/nfsd.sh
+            subPath: nfsd.sh
+          - name: config-files
+            mountPath: /etc/exports
+            subPath: exports
+        {{- range $name,$config := $.Values.nfsserver.volumes | default dict }}
+        {{- if $config.mounts }}
+        {{- range $mount := $config.mounts }}
+          - name: {{$name}}
+            mountPath: /exports{{$mount.mountPath}}
+          {{- if $mount.subPath }}
+            subPath: {{ $mount.subPath }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        securityContext:
+          privileged: true # Mandatory requirement for NFS daemons to execute inside a pod
+        stdin: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        tty: true
+      volumes:
+      - name: scripts
+        configMap:
+          name: {{ $.Release.Name }}-nfsserver-configmap-scripts
+          optional: false
+          defaultMode: 0555
+      - name: config-files
+        configMap:
+          name: {{ $.Release.Name }}-nfsserver-configmap-config-files
+          optional: false
+          defaultMode: 0444
+      {{- range $name,$config := $.Values.nfsserver.volumes | default dict }}
+      - name: {{$name}}
+        persistentVolumeClaim:
+          claimName: {{$.Release.Name}}-nfsserver-{{ $name }}
+      {{- end }}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30
+      {{- if $.Values.nfsserver.tolerations }}
+      tolerations:
+{{ $.Values.nfsserver.tolerations | toYaml | indent 8 }}
+      {{- end }}
+      {{- if $.Values.nfsserver.affinity }}
+      affinity:
+{{ $.Values.nfsserver.affinity | toYaml | indent 8 }}
+      {{- end }}
+      {{- if $.Values.nfsserver.nodeSelector }}
+      nodeSelector:
+{{ $.Values.nfsserver.nodeSelector | toYaml | indent 8 }}
+      {{- end }}
+  updateStrategy:
+    rollingUpdate:
+      partition: 0
+    type: RollingUpdate
+{{- end }}

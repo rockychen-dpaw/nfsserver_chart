@@ -1,0 +1,11 @@
+{{- if hasKey $.Values "nfsserver" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{$.Release.Name}}-nfsserver-configmap-scripts
+  annotations:
+    field.cattle.io/description: customized config files & script files
+binaryData:
+  nfsd.sh: >- 
+{{ include "nfsserver.nfsd.sh" . | b64enc | indent 4 }}
+{{- end }}

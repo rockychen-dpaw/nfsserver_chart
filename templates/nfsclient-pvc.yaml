@@ -1,0 +1,21 @@
+{{- if hasKey $.Values "nfsclient" }}
+{{- $count := 0 }}
+{{- range $name,$config := $.Values.nfsclient.volumes | default dict }}
+{{- $count = add $count 1}}
+{{- if gt $count 1 }}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{$.Release.Name}}-nfsclient-{{ $name }}
+spec:
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: {{ $config.storage }}
+  storageClassName: {{ $config.storageClassName | default "managed-csi-retain" }}
+  volumeMode: "Filesystem"
+{{- end }}
+{{- end }}

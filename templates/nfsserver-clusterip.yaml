@@ -1,0 +1,24 @@
+{{- if hasKey $.Values "nfsserver" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{$.Release.Name}}-nfsserver
+  namespace: {{$.Release.Namespace}}
+spec:
+  ports:
+  - name: default
+    port: 2049
+    protocol: TCP
+    targetPort: 2049
+  - name: mountd
+    port: 20048
+    protocol: TCP
+    targetPort: 20048
+  - name: rpcbind
+    port: 111
+    protocol: TCP
+    targetPort: 111
+  selector:
+    workload.user.cattle.io/workloadselector: apps.statefulset-{{ $.Release.Namespace}}-{{$.Release.Name}}-nfsserver
+  type: ClusterIP
+{{- end }}
