@@ -23,7 +23,8 @@ parameters:
   share: {{$mount.mountPath}}
   mountPermissions: "0770"
 reclaimPolicy: {{$mount.reclaimPolicy | default "Delete"}}         # Delete will wipe the directory on the NFS server when PVC is deleted
-volumeBindingMode: Immediate
+volumeBindingMode: {{$mount.volumeBindingMode | default "WaitForFirstConsumer"}}
+allowVolumeExpansion: true
 mountOptions:
   - hard
   - nfsvers=4.2        # Adjust according to your NFS server version (e.g., 3, 4.0, 4.1)
