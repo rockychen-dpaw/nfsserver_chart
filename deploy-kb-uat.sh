@@ -1,9 +1,9 @@
 #!/bin/bash
 isuat=$(kubectl config get-contexts | grep  -E "\*\s+az-aks-oim03" | wc -l)
 if [[ ${isuat} -eq 1 ]]; then
-    echo "Kubectl is connected to az-aks-oim03, begin to deploy nfs server for kb in uat env"
+    echo "Kubectl is connected to az-aks-oim03, begin to deploy nfs server for kb-uat in uat env"
 else
-    echo "Kubectl is not connected to az-aks-oim03, can't deploy nfs server for kb in prod env"
+    echo "Kubectl is not connected to az-aks-oim03, can't deploy nfs server for kb-uat in prod env"
     exit 1
 fi
 
