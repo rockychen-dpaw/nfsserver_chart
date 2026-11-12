@@ -7,4 +7,4 @@ else
     exit 1
 fi
 
-./deploy.sh upgrade --values values-kb-prod.yaml -n nfs kb ./
+./deploy.sh upgrade --values values-kb-prod.yaml -n nfs kb2 ./
